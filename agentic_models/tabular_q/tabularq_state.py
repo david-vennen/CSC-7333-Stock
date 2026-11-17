@@ -25,6 +25,7 @@ class TabularQState:
 		return_10 based on recent price returns (momentum)
 		vol_10 is based on recent volatility
 		rsi_10 is RSI (oversold/undersold) 
+		ten_year_treasury is FRED DGS10 yield
 		"""
 		return (
 			self._bin(row.get("return_10"), self.return_edges),
