@@ -1,6 +1,15 @@
 import pandas as pd
 from .stock_data_loader import StockDataLoader as SDL
 
+
+TIMEFRAMES = ["5min", "15min", "30min", "1hour", "1week", "1month"]
+
+PROVIDES = {
+    f"{tf}_{col}"
+    for tf in TIMEFRAMES
+    for col in ["open", "high", "low", "close", "volume"]
+}
+
 class MultiTimeFrameFeatures:
 	def __init__(self, loader: SDL):
 		self.loader = loader

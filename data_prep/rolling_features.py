@@ -1,6 +1,19 @@
 import pandas as pd
 import numpy as np
 
+#necessary for state builder argument parsing
+PROVIDES = {
+	"return_5", "return_10", "return_20", "return_50",
+    "log_return_5", "log_return_10", "log_return_20", "log_return_50",
+    "vol_5", "vol_10", "vol_20", "vol_50",
+    "rsi_5", "rsi_10", "rsi_20", "rsi_50",
+    "ema_5", "ema_10", "ema_20", "ema_50",
+    "price_ema_ratio_5", "price_ema_ratio_10", "price_ema_ratio_20", "price_ema_ratio_50",
+    "macd", "macd_signal", "macd_hist",
+    "atr",
+	"vwap",
+}
+
 class RollingFeatures:
 	'''
 	Creates rolling widows features on top of multi-timeframe data.
@@ -56,6 +69,9 @@ class RollingFeatures:
 
 		#ATR
 		df = self._add_atr(df)
+
+		#VWAP
+		df = self._add_vwap(df)
 
 		return df.dropna(how='all')
 

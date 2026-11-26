@@ -5,8 +5,10 @@
 import numpy as np
 
 class TabularQState:
-	#edges are the edges of the bins for the table regarding state. 
+	#required_features array needed for state_builder
+	required_features = ["return_10", "vol_10", "rsi_10", "ten_year_treasury"]
 	
+	#edges are the edges of the bins for the table regarding state. 
 	def __init__(self, return_edges=None, vol_edges=None, rsi_edges=None, rate_edges=None):
 		self.return_edges = return_edges or [-0.01, -0.002, 0.002, 0.01]
 		self.vol_edges = vol_edges or [0.005, 0.01, 0.02]
