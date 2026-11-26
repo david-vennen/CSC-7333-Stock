@@ -15,6 +15,7 @@ class Trade:
 	quantity: float
 	price: float
 	buy_sell: str
+	realized_pnl: float = 0.0
 
 class Portfolio:
 	'''Portfolio tracks Cash, stock holdings, trade history, and profits and loss.'''
@@ -70,7 +71,7 @@ class Portfolio:
 			remaining -= sell_qty
 
 		self.cash += actual_sold * price
-		self.trade_history.append(Trade(dt, ticker, actual_sold, price, 'sell'))
+		self.trade_history.append(Trade(dt, ticker, actual_sold, price, 'sell',realized_pnl=pnl))
 		return True
 
 	def payday(self, paycheck: float):
@@ -83,7 +84,7 @@ class Portfolio:
 		for ticker, lots in self.stock_holdings.items():
 			price = current_prices.get(ticker, 0.0)
 			for _, qty, _ in lots:
-				value += qty * price
+				value += qty * price     
 		return value
 
 	def get_position_summary(self)-> Dict[str, Dict]:
@@ -102,6 +103,22 @@ class Portfolio:
 		if ticker not in self.stock_holdings:
 			return 0.0
 		return sum(qty for _, qty, _ in self. stock_holdings[ticker])
+
+	#just added and might not need. get_position_summary is essentially the same but we might need to add cash there and remove snapshot. 
+	def snapshot(self, prices: Dict[str, float]) -> dict:
+	    """Return a plain dict the allocator/environment can store."""
+	    return {
+	        "cash": self.cash,
+	        "value": self.get_current_value(prices),
+	        "holdings": {
+	            t: self.get_total_shares(t) for t in self.stock_holdings
+	        },
+	    }
+
+	def ticker_mtm(self, ticker: str, price_before: float, price_after: float) -> float:
+	    """Mark-to-market change for one ticker between two prices."""
+	    shares = self.get_total_shares(ticker)
+	    return shares * (price_after - price_before)
 		
 	def save_trade_history(self, filepath: str):
 		'''Save complete trade history to CSV'''
