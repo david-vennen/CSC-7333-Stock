@@ -24,6 +24,11 @@ class Portfolio:
 		self.stock_holdings: Dict[str, List[Tuple[ datetime.datetime, float, float]]] = defaultdict(list)
 		self.trade_history: List[Trade] = []
 		self.profit_loss: float = 0.0
+		# payday schedule
+		self._payday_frequency: Optional[str] = None
+		self._payday_amount: float = 0.0
+		self._payday_anchor: Optional[pd.Timestamp] = None
+		self._paid_dates: set = set()
 
 	def buy(self, dt:datetime.datetime, ticker:str, quantity: float, price:float)->bool:
 		'''Buy if enough cash. Returns true on success'''
@@ -54,6 +59,7 @@ class Portfolio:
 
 		#FIFO for accounting and calculating profit and loss
 		remaining = actual_sold
+		total_pnl = 0.0
 		while remaining > 0 and self.stock_holdings[ticker]:
 			buy_dt, lot_qty, buy_price = self.stock_holdings[ticker][0]
 			sell_qty = min(remaining, lot_qty)     #can't sell more than you have
@@ -61,7 +67,8 @@ class Portfolio:
 			#realized profit and loss
 			pnl = sell_qty * (price - buy_price)
 			self.profit_loss += pnl
-
+			total_pnl += pnl
+			
 			#update lot
 			if sell_qty >= lot_qty:
 				self.stock_holdings[ticker].pop(0)
@@ -69,14 +76,87 @@ class Portfolio:
 				self.stock_holdings[ticker][0] = (buy_dt, lot_qty - sell_qty, buy_price)
 
 			remaining -= sell_qty
-
+			
 		self.cash += actual_sold * price
-		self.trade_history.append(Trade(dt, ticker, actual_sold, price, 'sell',realized_pnl=pnl))
+		self.trade_history.append(Trade(dt, ticker, actual_sold, price, 'sell',realized_pnl=total_pnl))
+		
 		return True
 
 	def payday(self, paycheck: float):
 		'''Add paycheck to cash'''
 		self.cash += paycheck
+
+	def set_payday_schedule(self, frequency: str, amount: float, anchor: str | None = None):
+		"""
+		Configure automatic paydays.
+		frequency: "weekly" | "biweekly" | "twice_monthly" | "monthly"
+		amount:    dollars added on each payday
+		anchor:    first payday date (YYYY-MM-DD). Optional.
+		"""
+		self._payday_frequency = frequency.lower().replace(" ", "_").replace("-", "_")
+		self._payday_amount = float(amount)
+		self._payday_anchor = pd.Timestamp(anchor) if anchor else None
+		self._paid_dates = set()
+
+	def apply_due_paydays(self, current_ts) -> float:
+		"""Inject any scheduled paydays that have arrived. Returns cash added."""
+		if not self._payday_frequency or self._payday_amount == 0:
+			return 0.0
+
+		now = pd.Timestamp(current_ts)
+		if now.tz is not None:
+			now = now.tz_localize(None)
+			
+		anchor = self._payday_anchor or now
+		added = 0.0
+
+		for due in self._iter_due(anchor, now):
+			key = due.strftime("%Y-%m-%d")
+			if key in self._paid_dates:
+				continue
+			self.payday(self._payday_amount)
+			self._paid_dates.add(key)
+			added += self._payday_amount
+		return added
+
+	def total_paydays_received(self) -> float:
+		"""Cash injected so far via the schedule."""
+		return len(self._paid_dates) * self._payday_amount
+
+	def _iter_due(self, anchor: pd.Timestamp, now: pd.Timestamp):
+		"""Yield payday timestamps in [anchor, now] for the configured frequency."""
+		freq = self._payday_frequency
+		if freq == "weekly":
+			d = anchor
+			while d <= now:
+				yield d
+				d += pd.Timedelta(days=7)
+		elif freq in ("biweekly", "every_other_week"):
+			d = anchor
+			while d <= now:
+				yield d
+				d += pd.Timedelta(days=14)
+		elif freq in ("twice_monthly", "semi_monthly", "semimonthly"):
+			cursor = pd.Timestamp(year=anchor.year, month=anchor.month, day=1)
+			while cursor <= now:
+				for day in (1, 15):
+					try:
+						cand = pd.Timestamp(year=cursor.year, month=cursor.month, day=day)
+					except ValueError:
+						continue
+					if anchor <= cand <= now:
+						yield cand
+				cursor = cursor + pd.offsets.MonthBegin(1)
+		elif freq == "monthly":
+			d = anchor
+			while d <= now:
+				yield d
+				d = d + pd.DateOffset(months=1)
+		else:
+			raise ValueError(
+				f"Unknown payday frequency: {freq}. "
+				"Use weekly, biweekly, twice_monthly, or monthly."
+			)
 
 	def get_current_value(self, current_prices: Dict[str, float]) -> float:
 		'''Total portfolio value = cash + market value of stock holdings'''
@@ -89,6 +169,7 @@ class Portfolio:
 
 	def get_position_summary(self)-> Dict[str, Dict]:
 		'''For reinforcement learning State: shares owned and avg cost per ticker'''
+		#not used in CSC7333 project. Dimensionality issue with multiple tickers. 
 		summary = {}
 		for ticker, lots in self.stock_holdings.items():
 			total_shares = sum(qty for _, qty, _ in lots)
@@ -225,5 +306,3 @@ class Portfolio:
 		plt.close()
 
 		print(f"Equity curve saved: {os.path.basename(filepath)} + plot")
-				   
-	

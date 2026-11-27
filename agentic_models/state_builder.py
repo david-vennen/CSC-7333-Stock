@@ -4,7 +4,7 @@ import pandas as pd
 
 #Producers
 from data_prep.stock_data_loader import StockDataLoader
-from data_prep.fred_features import add_fred, PROVIDES as FRED_PROVIDES
+from data_prep.fred_features import add_fred, PROVIDES as FRED_PROVIDES, ALIASES
 from data_prep.rolling_features import RollingFeatures, PROVIDES as ROLLING_PROVIDES
 from data_prep.feature_engineering import MultiTimeFrameFeatures, PROVIDES as MULTI_TF_PROVIDES
 
@@ -30,6 +30,7 @@ def _route_features(required: list[str])->dict[str, list[str]]:
 	return routing
 
 def build_state_frame(
+	loader: StockDataLoader,
 	state_cls,
 	ticker: str, 
 	start:str | None= None,
@@ -64,7 +65,10 @@ def build_state_frame(
 	#Fred
 	if routing["fred"]:
 		#map internal names to FRED ids if necessary
-		series_map = {feat: feat for feat in routing["fred"]}
+		series_map = {
+			ALIASES.get(feat,feat) : feat
+			for feat in routing["fred"]
+		}
 		df = add_fred(df, series_map)
 		
 	#Rolling features (flat path) primary bar
@@ -92,9 +96,8 @@ def build_state_frame(
 			aligned = tf_df[cols].reindex(df.index, method="ffill")
 			aligned = aligned.add_prefix(f"{tf_key}_")
 			df = df.join(aligned)
-
+	keep = list(dict.fromkeys(["close", *required]))
 	missing = [f for f in required if f not in df.columns]
 	if missing:
 		raise ValueError(f"Missing features after build: {missing}")
-
-	return df[required].dropna()
+	return df[keep].dropna(subset=required)

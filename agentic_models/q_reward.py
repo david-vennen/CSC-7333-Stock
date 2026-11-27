@@ -3,7 +3,7 @@
 
 import numpy as np
 
-class TabularQReward:
+class QReward:
 	"""
 	Immediate reward :
 		mark-to-market return
@@ -26,7 +26,7 @@ class TabularQReward:
 		"""
 
 		self.realized_bonus = realized_bonus
-		self. loss_penalty_scale = loss_penalty_scale
+		self.loss_penalty_scale = loss_penalty_scale
 		self.cost_penalty = cost_penalty
 		self.clip = clip
 
