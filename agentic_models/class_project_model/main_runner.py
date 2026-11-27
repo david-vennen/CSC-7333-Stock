@@ -128,42 +128,42 @@ def align_all_dataframes(master_data: dict, timeline):
 
 #wiring in new observers and interfaecs for experiments
 def run_backtest_cycle(model, master_data, tickers):
-    # Create output tracker for this session
-    output_tracker = SoftmaxWeightTracker()
+	# Create output tracker for this session
+	output_tracker = SoftmaxWeightTracker()
 
-    # Initialize observer with tracker
-    observer = BadDayTradingObserver(output_tracker=output_tracker)
+	# Initialize observer with tracker
+	observer = BadDayTradingObserver(output_tracker=output_tracker)
 
-    for i, dt in enumerate(timeline):
-        if i % REBALANCE_EVERY == 0:
-            features = get_current_sequence(master_data, i, seq_gen, WINDOW_SIZE)
-            features = normalize_features(features)
+	for i, dt in enumerate(timeline):
+		if i % REBALANCE_EVERY == 0:
+			features = get_current_sequence(master_data, i, seq_gen, WINDOW_SIZE)
+			features = normalize_features(features)
 
-            with torch.no_grad():
-                challenger_weights = model(features)
+			with torch.no_grad():
+				challenger_weights = model(features)
 
-            # Record prediction in tracker (model-agnostic)
-            output_tracker.record_prediction(ModelOutput(
-                raw_output=challenger_weights,
-                action_space_size=len(tickers)
-            ))
+			# Record prediction in tracker (model-agnostic)
+			output_tracker.record_prediction(ModelOutput(
+				raw_output=challenger_weights,
+				action_space_size=len(tickers)
+			))
 
-        # Get tracked metrics for state
-        session_metrics = output_tracker.get_session_metrics()
+		# Get tracked metrics for state
+		session_metrics = output_tracker.get_session_metrics()
 
-        state = TradingDayState(
-            vix_level=get_vix_level(),
-            hour_of_day=dt.hour,
-            day_of_week=dt.dayofweek,
-            rolling_returns_5d=[0.01] * 5,
-            system_load_at_open=os.getloadavg()[0],
-            memory_available_gb=psutil.virtual_memory().available / (1024 ** 3),
-            model_confidence_avg=session_metrics["confidence_avg"],
-            model_prediction_variance=session_metrics["prediction_variance"],
-        )
+		state = TradingDayState(
+			vix_level=get_vix_level(),
+			hour_of_day=dt.hour,
+			day_of_week=dt.dayofweek,
+			rolling_returns_5d=[0.01] * 5,
+			system_load_at_open=os.getloadavg()[0],
+			memory_available_gb=psutil.virtual_memory().available / (1024 ** 3),
+			model_confidence_avg=session_metrics["confidence_avg"],
+			model_prediction_variance=session_metrics["prediction_variance"],
+		)
 
-        if not observer.should_prune_day(state):
-            proceed_with_trading()
+		if not observer.should_prune_day(state):
+			proceed_with_trading()
     
 def main():
 	load_dotenv()
@@ -221,12 +221,12 @@ def main():
 	input_dim = seq_gen.get_feature_count() * len(TICKERS)
 
 	#create model with correct input dimension
-    #might need to modify to pass in drop out. during training, drop out is good.
-    #unpredicdtable results if left during runs
-    if TRAINING_MODE:
-        dropout = 0.2
-    else:
-        dropout = 0.0
+	#might need to modify to pass in drop out. during training, drop out is good.
+	#unpredicdtable results if left during runs
+	if TRAINING_MODE:
+		dropout = 0.2
+	else:
+		dropout = 0.0
 	model = ChallengerAgent(input_dim=input_dim, hidden_dim=128, num_stocks=len(TICKERS), dropout=dropout)
 	print(f"Model initialized with {input_dim} features (multi-ticker)")
 	model_path = "challenger_model.pth"
@@ -318,4 +318,4 @@ def main():
 		
 
 if __name__ == "__main__":
-    main()
+	main()

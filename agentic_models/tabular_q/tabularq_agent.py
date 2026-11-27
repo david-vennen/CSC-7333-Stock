@@ -6,12 +6,12 @@
 import random
 import numpy as np
 from .tabularq_state import TabularQState
-from .tabularq_reward import TabularQReward
+from ..q_reward import QReward
 
 class TabularQAgent:
 	def __init__(self, state_builder_cfg, reward_cfg, alpha, gamma, epsilon, actions=("buy", "hold", "sell"), q_init=0.0, seed =42):
 		self.state = TabularQState(**(state_builder_cfg or {}))
-		self.reward = TabularQReward(**reward_cfg)
+		self.reward = QReward(**reward_cfg)
 		self.q_table = {}
 		self.alpha = alpha
 		self.gamma = gamma

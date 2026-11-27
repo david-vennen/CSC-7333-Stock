@@ -1,0 +1,79 @@
+{
+  "experiment_id": "exp_20261127_120912",
+  "config_summary": {
+    "tickers": [
+      "NVDA",
+      "AAPL",
+      "MSFT",
+      "AMZN",
+      "WMT",
+      "JPM",
+      "V",
+      "JNJ",
+      "CAT",
+      "CVX",
+      "CSCO",
+      "PG",
+      "HD",
+      "KO",
+      "UNH",
+      "MRK",
+      "GS",
+      "AXP",
+      "MCD",
+      "IBM",
+      "VZ",
+      "AMGN",
+      "DIS",
+      "BA",
+      "CRM",
+      "HON",
+      "SHW",
+      "MMM",
+      "NKE",
+      "TRV"
+    ],
+    "models_to_test": [
+      "tabularq"
+    ],
+    "data_to_include": [
+      "return_10",
+      "rsi_10",
+      "ten_year_treasury",
+      "vol_10"
+    ],
+    "train": [
+      "2012-01-01",
+      "2020-12-31"
+    ],
+    "test": [
+      "2021-01-01",
+      "2025-12-31"
+    ],
+    "starting_cash": 10000,
+    "payday_frequency": "weekly",
+    "payday_amount": 1000.0,
+    "payday_anchor": "2012-01-01"
+  },
+  "model_results": [
+    {
+      "model_type": "tabularq",
+      "final_value": 741000.0,
+      "total_return": 0.0,
+      "sharpe": null,
+      "max_drawdown": null,
+      "num_trades": 0,
+      "equity_curve": []
+    },
+    {
+      "model_type": "spy_control",
+      "final_value": 10000.0,
+      "total_return": 0.0,
+      "sharpe": null,
+      "max_drawdown": null,
+      "num_trades": 0,
+      "equity_curve": []
+    }
+  ],
+  "training_time_seconds": 733.7441689968109
+}
