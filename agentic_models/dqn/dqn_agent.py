@@ -73,12 +73,27 @@ class DQNAgent:
 		self.env_steps = 0
 		self.grad_steps = 0
 
-	# ---------- acting ----------
+		#harness-facing attributes (see "experiment_harness interface" below); unused by train_dqn.py
+		self.actions = tuple(range(c.n_actions))
+		self.state = None     #DQNState, set by for_harness()
+		self.reward = None    #QReward, set by for_harness()
+		self._epsilon_override = None
+		self._q_cache = (None, None)
+
+	# acting
 	@property
 	def epsilon(self) -> float:
+		"""Linear decay over env steps, unless something (e.g. the harness at test time) set it directly."""
+		if self._epsilon_override is not None:
+			return self._epsilon_override
 		c = self.config
 		frac = min(1.0, self.env_steps / max(1, c.eps_decay_steps))
 		return c.eps_start + frac * (c.eps_end - c.eps_start)
+
+	@epsilon.setter
+	def epsilon(self, value):
+		"""Setting epsilon freezes it at that value; set None to go back to the decay schedule."""
+		self._epsilon_override = None if value is None else float(value)
 
 	def q_values(self, states: np.ndarray) -> np.ndarray:
 		"""Q-values for a batch (or single) state, dropout off."""
@@ -96,7 +111,7 @@ class DQNAgent:
 			return int(self.rng.integers(self.config.n_actions))
 		return int(self.q_values(state)[0].argmax())
 
-	# ---------- learning ----------
+	# learning
 	def remember(self, state, action, reward, next_state, terminated: bool):
 		"""Store one transition. Pass `terminated`, not `truncated`: an episode cut short by a time
 		limit should still bootstrap from next_state."""
@@ -148,7 +163,77 @@ class DQNAgent:
 		elif self.grad_steps % c.target_sync_every == 0:
 			self.target_net.load_state_dict(self.q_net.state_dict())
 
-	# ---------- checkpointing ----------
+	# experiment_harness interface (same methods as TabularQAgent) 
+	#
+	# experiment_harness._run_model_loop calls, per ticker per bar:
+	#     state  = agent.state.build_from_row(row)
+	#     action = agent.select_action(state)          -> one of agent.actions ("buy"/"hold"/"sell")
+	#     score  = agent.get_q_value(state, action)    -> used by RankedAllocator to rank tickers
+	#     agent.update(state, action, reward, next_state)   (training only; reward from QReward)
+	# and sets agent.epsilon = 0.0 during testing.
+	#
+	# Use ONE shared agent for all tickers: {t: agent for t in tickers}. Each update() call is one
+	# transition, so eps_decay_steps / warmup_steps / buffer_size count transitions (bars x tickers).
+
+	@classmethod
+	def for_harness(
+		cls,
+		train_frames,
+		config: DQNConfig | None = None,
+		state_cfg: dict | None = None,
+		reward_cfg: dict | None = None,
+		actions=("buy", "hold", "sell"),
+	) -> "DQNAgent":
+		"""
+		Build a DQN ready for the harness loop.
+		train_frames: {ticker: DataFrame} from the TRAINING period (the feature scaler is fit on these only).
+		state_cfg: DQNState kwargs (e.g. feature_cols). lookback must stay 1 for row-by-row harness use.
+		reward_cfg: QReward kwargs (the reward shared with tabular Q).
+		"""
+		from .dqn_state import DQNState
+		from ..q_reward import QReward
+
+		state_cfg = {"include_position": False, **(state_cfg or {})}
+		if state_cfg.get("lookback", 1) != 1:
+			raise ValueError("the harness builds states one row at a time; use lookback=1")
+		state = DQNState(**state_cfg).fit(train_frames)
+
+		config = config or DQNConfig()
+		config.n_actions = len(actions)
+		agent = cls(state.state_dim, config)
+		agent.actions = tuple(actions)
+		agent.state = state
+		agent.reward = QReward(**(reward_cfg or {}))
+		return agent
+
+	def _action_index(self, action) -> int:
+		return self.actions.index(action)
+
+	def _cached_q(self, state) -> np.ndarray:
+		"""select_action then get_q_value on the same state -> one forward pass, not two."""
+		cached_state, cached_q = self._q_cache
+		if cached_state is state:
+			return cached_q
+		q = self.q_values(state)[0]
+		self._q_cache = (state, q)
+		return q
+
+	def select_action(self, state):
+		"""Epsilon-greedy over self.actions. Returns the action label (e.g. "buy")."""
+		if self.rng.random() < self.epsilon:
+			return self.actions[int(self.rng.integers(len(self.actions)))]
+		return self.actions[int(self._cached_q(state).argmax())]
+
+	def get_q_value(self, state, action) -> float:
+		return float(self._cached_q(state)[self._action_index(action)])
+
+	def update(self, state, action, reward, next_state) -> float | None:
+		"""Store the transition and take a gradient step (when warm). Market steps never terminate."""
+		self.remember(state, self._action_index(action), reward, next_state, terminated=False)
+		self._q_cache = (None, None)   #weights may change below
+		return self.learn()
+
+	# checkpointing 
 	def get_weights(self) -> dict:
 		return copy.deepcopy(self.q_net.state_dict())
 

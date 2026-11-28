@@ -36,6 +36,9 @@ class DQNState:
 	Features at row t must only use data available by the close of bar t (RollingFeatures does).
 	"""
 
+	#read by experiment_harness.resolve_data_to_include / state_builder (same contract as TabularQState)
+	required_features = list(DEFAULT_FEATURES)
+
 	def __init__(self, feature_cols=None, lookback: int = 1, clip: float = 5.0, include_position: bool = True):
 		self.requested_cols = list(feature_cols or DEFAULT_FEATURES)
 		self.lookback = lookback
@@ -113,11 +116,25 @@ class DQNState:
 		return stack.astype(np.float32)
 
 	def build_from_row(self, row: pd.Series, position: float = 0.0) -> np.ndarray:
-		"""Single-bar convenience mirror of TabularQState.build_from_row (lookback must be 1)."""
+		"""
+		Mirror of TabularQState.build_from_row: one bar (a Series with the feature columns + close)
+		-> standardized float32 vector. Fast path for the harness, which calls this per ticker per bar.
+		"""
+		self._check_fitted()
 		if self.lookback != 1:
 			raise ValueError("build_from_row only supports lookback=1; use transform()+observation()")
-		feats = self.transform(row.to_frame().T)
-		return self.observation(feats, 0, position)
+		x = row.reindex(self.feature_cols).to_numpy(dtype=np.float64)
+		if self._price_scaled_mask.any():
+			x[self._price_scaled_mask] /= float(row["close"])
+		x = (x - self.mean) / self.std
+		x = np.clip(np.nan_to_num(x, nan=0.0, posinf=self.clip, neginf=-self.clip), -self.clip, self.clip)
+		if self.include_position:
+			x = np.append(x, position)
+		return x.astype(np.float32)
+
+	@property
+	def _price_scaled_mask(self) -> np.ndarray:
+		return np.array([c in PRICE_SCALED_COLS for c in self.feature_cols])
 
 	@property
 	def state_dim(self) -> int:
